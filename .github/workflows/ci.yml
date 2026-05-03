@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore EnvSync.slnx
+
+      - name: Verify formatting
+        run: dotnet format EnvSync.slnx --verify-no-changes --verbosity minimal
+
+      - name: Test
+        run: dotnet test EnvSync.slnx --no-restore --configuration Release
+
+      - name: Audit vulnerable packages
+        run: dotnet list EnvSync.slnx package --vulnerable --include-transitive
+
+      - name: List outdated packages
+        run: dotnet list EnvSync.slnx package --outdated

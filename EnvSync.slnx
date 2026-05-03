@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EnvSync.Cli/EnvSync.Cli.csproj" />
+    <Project Path="src/EnvSync.Core/EnvSync.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EnvSync.Cli.Tests/EnvSync.Cli.Tests.csproj" />
+    <Project Path="tests/EnvSync.Core.Tests/EnvSync.Core.Tests.csproj" />
+  </Folder>
+</Solution>
