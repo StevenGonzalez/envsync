@@ -21,14 +21,16 @@
     <Description>CLI-first universal environment variable manager. Sync env vars across local .env files, GitHub Actions, Azure DevOps, AWS SSM, HashiCorp Vault, and Azure Key Vault.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/StevenGonzalez/envsync</RepositoryUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>README.NuGet.md</PackageReadmeFile>
+    <PackageIcon>envsync-logo.png</PackageIcon>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <WarningsAsErrors>$(WarningsAsErrors);1591</WarningsAsErrors>
   </PropertyGroup>
 
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\README.NuGet.md" Pack="true" PackagePath="README.NuGet.md" />
+    <None Include="..\..\assets\brand\envsync-logo.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
