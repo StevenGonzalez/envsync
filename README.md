@@ -55,6 +55,8 @@ envsync generate --language typescript|csharp [--schema <path>] [--output <path>
 | `local:<path>` | Reads and writes a dotenv file. Preserves existing comments and ordering. Writes are atomic and permissions are restricted for secret safety. |
 | `github:<owner>/<repo>` | GitHub Actions variables (readable) and secrets (write-only, encrypted with libsodium). |
 | `azuredevops:<org>/<project>/<group>` | Azure DevOps Library variable group. Secret variables are write-only. |
+| `azureappservice:<subscription-id>/<resource-group>/<app-name>` | Azure App Service application settings. Uses `DefaultAzureCredential`. Updating settings restarts the app. |
+| `azureappservice:<subscription-id>/<resource-group>/<app-name>/<slot-name>` | Azure App Service deployment slot application settings. |
 | `ssm:<path-prefix>` | AWS Systems Manager Parameter Store. `SecureString` parameters surface as hidden. |
 | `vault:<mount>/<secret-path>` | HashiCorp Vault KV v2. Writes use read-merge-write to preserve unreferenced keys. |
 | `azurekeyvault:<vault-name>` | Azure Key Vault. Uses `DefaultAzureCredential`. Underscore-to-hyphen translation is applied automatically. |
@@ -67,6 +69,9 @@ envsync diff --left local:.env --right azuredevops:myorg/myproject/production
 
 # Push from GitHub to Azure DevOps
 envsync push --from github:myorg/myrepo --to azuredevops:myorg/myproject/staging
+
+# Push local production values to Azure App Service
+envsync push --from local:.env.production --to azureappservice:00000000-0000-0000-0000-000000000000/my-resource-group/my-api
 
 # Sync from AWS SSM to local
 envsync pull --from ssm:/myapp/prod --to local:.env.local
@@ -81,6 +86,7 @@ envsync push --from vault:secret/myapp/staging --to vault:secret/myapp/productio
 |----------|------|---------------------|-------|
 | GitHub | `--github-token` | `GITHUB_TOKEN` | Personal access token or Actions token with `repo` scope |
 | Azure DevOps | `--azuredevops-token` | `AZURE_DEVOPS_TOKEN` | Personal access token with Variable Groups read/write |
+| Azure App Service | -- | -- | `DefaultAzureCredential`: env vars to workload identity to managed identity to `az login` |
 | AWS SSM | `--aws-region` | `AWS_DEFAULT_REGION` / `AWS_REGION` | Credentials from standard AWS chain (env vars, `~/.aws/credentials`, IAM role) |
 | HashiCorp Vault | `--vault-token` | `VAULT_TOKEN` | Server address via `--vault-address` or `VAULT_ADDR` (default: `http://127.0.0.1:8200`) |
 | Azure Key Vault | -- | -- | `DefaultAzureCredential`: env vars to workload identity to managed identity to `az login` |
@@ -91,6 +97,7 @@ envsync push --from vault:secret/myapp/staging --to vault:secret/myapp/productio
 - Unknown provider schemes fail fast. A typo such as `gihub:owner/repo` is not treated as a local file path.
 - `pull --dry-run` and `push --dry-run` validate the target provider spec but do not require target credentials or write to the target.
 - Secret values are redacted in validation errors. Non-secret values may still appear in validation output.
+- Azure App Service application setting changes restart the app.
 - Local dotenv writes are atomic. On Unix, EnvSync writes local dotenv files as `0600`; on Windows, it protects the file ACL for the current user.
 - `.env` and `.env.*` files are ignored by the project `.gitignore` by default. Commit `.env.example` files for templates.
 

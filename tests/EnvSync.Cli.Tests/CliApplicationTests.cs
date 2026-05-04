@@ -365,6 +365,20 @@ public sealed class CliApplicationTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_BadAzureAppServiceSpec_ReturnsCode1WithGuidance()
+    {
+        await WriteSchemaAsync("X:\n  type: string\n");
+        var (app, _, stderr) = BuildApp();
+        var code = await app.RunAsync([
+            "validate", "--schema", SchemaPath,
+            "--provider", "azureappservice:subscription/resource-group",
+        ]);
+
+        Assert.Equal(1, code);
+        Assert.Contains("azureappservice:", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Validate_BadSsmSpec_ReturnsCode1()
     {
         await WriteSchemaAsync("X:\n  type: string\n");
@@ -494,6 +508,28 @@ public sealed class CliApplicationTests : IDisposable
         {
             Environment.SetEnvironmentVariable("GITHUB_TOKEN", saved);
         }
+    }
+
+    [Fact]
+    public async Task Pull_DryRun_DescribesAzureAppServiceTargetWithoutCredentials()
+    {
+        await WriteSchemaAsync("APP_ENV:\n  type: string\n  required: true\n");
+        await WriteEnvAsync("source.env", "APP_ENV=production\n");
+        var (app, stdout, _) = BuildApp();
+
+        var code = await app.RunAsync([
+            "pull",
+            "--schema", SchemaPath,
+            "--from", $"local:{TempPath("source.env")}",
+            "--to", "azureappservice:00000000-0000-0000-0000-000000000001/my-rg/my-api",
+            "--dry-run",
+        ]);
+
+        Assert.Equal(0, code);
+        Assert.Contains(
+            "azureappservice:00000000-0000-0000-0000-000000000001/my-rg/my-api",
+            stdout.ToString(),
+            StringComparison.Ordinal);
     }
 
     // IDisposable

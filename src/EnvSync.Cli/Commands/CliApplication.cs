@@ -3,6 +3,7 @@ using EnvSync.Core.CodeGeneration;
 using EnvSync.Core.Diffing;
 using EnvSync.Core.Model;
 using EnvSync.Core.Providers;
+using EnvSync.Core.Providers.AzureAppService;
 using EnvSync.Core.Providers.AzureDevOps;
 using EnvSync.Core.Providers.AzureKeyVault;
 using EnvSync.Core.Providers.AwsSsm;
@@ -17,6 +18,8 @@ namespace EnvSync.Cli.Commands;
 
 internal sealed class CliApplication
 {
+    private const string SupportedProviders = "local, github, azuredevops, azureappservice, ssm, vault, azurekeyvault";
+
     private readonly TextWriter _output;
     private readonly TextWriter _error;
     private readonly SchemaLoader _schemaLoader = new();
@@ -282,6 +285,11 @@ internal sealed class CliApplication
                 token));
         }
 
+        if (spec.StartsWith("azureappservice:", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ProviderLease(new AzureAppServiceProvider(ParseAzureAppServiceReference(spec)));
+        }
+
         if (spec.StartsWith("ssm:", StringComparison.OrdinalIgnoreCase))
         {
             var pathPrefix = spec[4..];
@@ -342,7 +350,7 @@ internal sealed class CliApplication
         if (LooksLikeUnknownProviderSpec(spec, out var providerName))
         {
             throw new CommandLineUsageException(
-                $"Unknown provider '{providerName}'. Supported providers: local, github, azuredevops, ssm, vault, azurekeyvault.");
+                $"Unknown provider '{providerName}'. Supported providers: {SupportedProviders}.");
         }
 
         return new ProviderLease(new LocalEnvFileProvider(spec));
@@ -380,6 +388,11 @@ internal sealed class CliApplication
             }
 
             return $"azuredevops:{new AzureDevOpsVariableGroupReference(segments[0], segments[1], segments[2])}";
+        }
+
+        if (spec.StartsWith("azureappservice:", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"azureappservice:{ParseAzureAppServiceReference(spec)}";
         }
 
         if (spec.StartsWith("ssm:", StringComparison.OrdinalIgnoreCase))
@@ -426,10 +439,34 @@ internal sealed class CliApplication
         if (LooksLikeUnknownProviderSpec(spec, out var providerName))
         {
             throw new CommandLineUsageException(
-                $"Unknown provider '{providerName}'. Supported providers: local, github, azuredevops, ssm, vault, azurekeyvault.");
+                $"Unknown provider '{providerName}'. Supported providers: {SupportedProviders}.");
         }
 
         return $"local:{spec}";
+    }
+
+    private static AzureAppServiceReference ParseAzureAppServiceReference(string spec)
+    {
+        var appSpec = spec["azureappservice:".Length..];
+        var segments = appSpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length is not (3 or 4))
+        {
+            throw new CommandLineUsageException(
+                "Azure App Service provider specs must use the form 'azureappservice:subscription-id/resource-group/app-name' or 'azureappservice:subscription-id/resource-group/app-name/slot-name'.");
+        }
+
+        try
+        {
+            return new AzureAppServiceReference(
+                segments[0],
+                segments[1],
+                segments[2],
+                segments.Length == 4 ? segments[3] : null);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CommandLineUsageException(exception.Message);
+        }
     }
 
     private static bool LooksLikeUnknownProviderSpec(string spec, out string providerName)
@@ -595,6 +632,7 @@ internal sealed class CliApplication
               local:config/.env.production
               github:owner/repository
               azuredevops:organization/project/groupName
+              azureappservice:subscription-id/resource-group/app-name[/slot-name]
               ssm:/myapp/production                         (AWS SSM Parameter Store)
               vault:secret/myapp                           (HashiCorp Vault KV v2)
               azurekeyvault:my-vault-name                  (Azure Key Vault)
@@ -606,13 +644,15 @@ internal sealed class CliApplication
                              override region with --aws-region or AWS_DEFAULT_REGION
               Vault:         --vault-token or VAULT_TOKEN env var
                              override address with --vault-address or VAULT_ADDR (default: http://127.0.0.1:8200)
-              Azure KV:      DefaultAzureCredential (env vars, managed identity, az login, etc.)
+              Azure:         DefaultAzureCredential for App Service and Key Vault
+                             (env vars, managed identity, az login, etc.)
 
             Notes:
               GitHub Actions secrets are write-only. EnvSync can detect their presence and upload new values,
               but cannot read secret plaintext back from GitHub.
               Azure DevOps secret variables are also write-only; the API redacts their values on read.
               AWS SSM SecureString parameters are surfaced as hidden (decryption requires kms:Decrypt permission).
+              Azure App Service restarts the app when application settings are changed.
             """;
 
         await _output.WriteLineAsync(helpText).ConfigureAwait(false);
