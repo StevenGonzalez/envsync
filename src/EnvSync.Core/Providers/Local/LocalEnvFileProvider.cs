@@ -4,18 +4,30 @@ using System.Security.Principal;
 
 namespace EnvSync.Core.Providers.Local;
 
+/// <summary>
+/// Reads and writes environment variables in a local dotenv file.
+/// </summary>
 public sealed class LocalEnvFileProvider : IEnvironmentProvider
 {
+    /// <summary>
+    /// Creates a local dotenv provider for the specified file path.
+    /// </summary>
+    /// <param name="path">The dotenv file path.</param>
     public LocalEnvFileProvider(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Path = path;
     }
 
+    /// <summary>
+    /// Gets the dotenv file path.
+    /// </summary>
     public string Path { get; }
 
+    /// <inheritdoc />
     public string Description => $"local:{Path}";
 
+    /// <inheritdoc />
     public async Task<EnvironmentSnapshot> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -34,6 +46,7 @@ public sealed class LocalEnvFileProvider : IEnvironmentProvider
         return new EnvironmentSnapshot(Description, values);
     }
 
+    /// <inheritdoc />
     public async Task<ProviderWriteResult> WriteAsync(IReadOnlyCollection<ResolvedEnvironmentValue> values, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -9,9 +9,9 @@ namespace EnvSync.Core.Providers.AzureKeyVault;
 /// <summary>
 /// Reads and writes environment variables stored as Azure Key Vault secrets.
 /// <para>
-/// Azure Key Vault secret names only allow alphanumeric characters and hyphens. Env-var keys
+/// Azure Key Vault secret names only allow alphanumeric characters and hyphens. Environment keys
 /// use <c>SCREAMING_SNAKE_CASE</c>, so underscores are translated to hyphens on write and back
-/// to underscores on read (e.g. <c>DATABASE_URL</c> ↔ <c>DATABASE-URL</c>).
+/// to underscores on read, for example <c>DATABASE_URL</c> maps to <c>DATABASE-URL</c>.
 /// </para>
 /// <para>
 /// Authentication is handled by <see cref="DefaultAzureCredential"/>, which resolves credentials
@@ -48,17 +48,22 @@ public sealed class AzureKeyVaultProvider : IEnvironmentProvider
         _client = client;
     }
 
+    /// <summary>
+    /// Gets the Azure Key Vault reference.
+    /// </summary>
     public AzureKeyVaultReference Reference { get; }
 
+    /// <inheritdoc />
     public string Description => $"azurekeyvault:{Reference.VaultName}";
 
+    /// <inheritdoc />
     public async Task<EnvironmentSnapshot> ReadAsync(CancellationToken cancellationToken = default)
     {
         var values = new List<EnvironmentValue>();
 
         await foreach (var properties in _client.GetPropertiesOfSecretsAsync(cancellationToken).ConfigureAwait(false))
         {
-            // Skip disabled secrets — they are not logically present in the environment.
+            // Skip disabled secrets; they are not logically present in the environment.
             if (properties.Enabled != true)
             {
                 continue;
@@ -72,7 +77,7 @@ public sealed class AzureKeyVaultProvider : IEnvironmentProvider
             }
             catch (RequestFailedException exception) when (exception.Status == 403)
             {
-                // Access denied on an individual secret — surface as hidden rather than failing
+                // Access denied on an individual secret; surface as hidden rather than failing
                 // the entire read, since partial visibility is better than a hard error.
                 var key = VaultNameToEnvKey(properties.Name);
                 values.Add(EnvironmentValue.Hidden(key));
@@ -82,6 +87,7 @@ public sealed class AzureKeyVaultProvider : IEnvironmentProvider
         return new EnvironmentSnapshot(Description, values);
     }
 
+    /// <inheritdoc />
     public async Task<ProviderWriteResult> WriteAsync(
         IReadOnlyCollection<ResolvedEnvironmentValue> values,
         CancellationToken cancellationToken = default)

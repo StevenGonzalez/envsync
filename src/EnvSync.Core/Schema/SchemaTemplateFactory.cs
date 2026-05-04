@@ -1,7 +1,15 @@
 namespace EnvSync.Core.Schema;
 
+/// <summary>
+/// Creates sample EnvSync schema files.
+/// </summary>
 public static class SchemaTemplateFactory
 {
+    /// <summary>
+    /// Creates a starter schema in the requested format.
+    /// </summary>
+    /// <param name="format">The schema format.</param>
+    /// <returns>The sample schema content.</returns>
     public static string CreateSample(SchemaFormat format)
     {
         return format switch

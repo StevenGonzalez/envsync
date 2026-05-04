@@ -4,10 +4,17 @@ using EnvSync.Core.Validation;
 
 namespace EnvSync.Core.Sync;
 
+/// <summary>
+/// Coordinates validation, resolution, and writes between environment providers.
+/// </summary>
 public sealed class EnvironmentSyncService
 {
     private readonly SchemaValidator _validator;
 
+    /// <summary>
+    /// Creates an environment sync service.
+    /// </summary>
+    /// <param name="validator">The schema validator used before syncing values.</param>
     public EnvironmentSyncService(SchemaValidator validator)
     {
         ArgumentNullException.ThrowIfNull(validator);
@@ -17,6 +24,11 @@ public sealed class EnvironmentSyncService
     /// <summary>
     /// Copies schema-managed values from one provider to another.
     /// </summary>
+    /// <param name="schema">The schema that controls which values sync.</param>
+    /// <param name="source">The source provider.</param>
+    /// <param name="target">The target provider.</param>
+    /// <param name="cancellationToken">A token that cancels the sync operation.</param>
+    /// <returns>The sync result.</returns>
     public async Task<SyncResult> SyncAsync(EnvSchema schema, IEnvironmentProvider source, IEnvironmentProvider target, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(schema);

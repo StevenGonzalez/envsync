@@ -10,9 +10,7 @@ public sealed class AwsSsmProviderTests
 {
     private const string Prefix = "/myapp/prod";
 
-    // -------------------------------------------------------------------------
     // ReadAsync
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task ReadAsync_ReturnsStringParameterAsAvailable()
@@ -97,9 +95,7 @@ public sealed class AwsSsmProviderTests
         Assert.Empty(snapshot.Values);
     }
 
-    // -------------------------------------------------------------------------
     // WriteAsync
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task WriteAsync_CallsPutParameter_WithCorrectPathAndValue()
@@ -165,9 +161,7 @@ public sealed class AwsSsmProviderTests
         Assert.Equal(2, result.UpdatedCount);
     }
 
-    // -------------------------------------------------------------------------
     // Description
-    // -------------------------------------------------------------------------
 
     [Fact]
     public void Description_UsesPathPrefix()
@@ -177,14 +171,12 @@ public sealed class AwsSsmProviderTests
         Assert.Equal("ssm:/my/service", provider.Description);
     }
 
-    // -------------------------------------------------------------------------
     // Edge cases
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task ReadAsync_Throws_WhenParameterNameDoesNotStartWithPrefix()
     {
-        // Simulate SSM returning a parameter whose name doesn't start with the configured prefix —
+        // Simulate SSM returning a parameter whose name doesn't start with the configured prefix:
         // e.g. a cross-account listing bug or unexpected API behaviour.
         var client = Substitute.For<IAmazonSimpleSystemsManagement>();
         client.GetParametersByPathAsync(Arg.Any<GetParametersByPathRequest>(), Arg.Any<CancellationToken>())
@@ -202,9 +194,7 @@ public sealed class AwsSsmProviderTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ReadAsync());
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     /// <summary>
     /// Builds a substituted SSM client that returns the given parameters on the first

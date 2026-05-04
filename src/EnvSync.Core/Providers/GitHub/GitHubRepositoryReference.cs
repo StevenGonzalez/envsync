@@ -1,7 +1,15 @@
 namespace EnvSync.Core.Providers.GitHub;
 
+/// <summary>
+/// Identifies a GitHub repository.
+/// </summary>
 public sealed record GitHubRepositoryReference
 {
+    /// <summary>
+    /// Creates a GitHub repository reference.
+    /// </summary>
+    /// <param name="owner">The repository owner or organization.</param>
+    /// <param name="repository">The repository name.</param>
     public GitHubRepositoryReference(string owner, string repository)
     {
         if (!IsValidOwner(owner))
@@ -18,10 +26,17 @@ public sealed record GitHubRepositoryReference
         Repository = repository;
     }
 
+    /// <summary>
+    /// Gets the repository owner or organization.
+    /// </summary>
     public string Owner { get; init; }
 
+    /// <summary>
+    /// Gets the repository name.
+    /// </summary>
     public string Repository { get; init; }
 
+    /// <inheritdoc />
     public override string ToString() => $"{Owner}/{Repository}";
 
     private static bool IsValidOwner(string value)

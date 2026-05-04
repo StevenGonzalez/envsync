@@ -3,11 +3,17 @@ using EnvSync.Core.Schema;
 
 namespace EnvSync.Core.Validation;
 
+/// <summary>
+/// Validates provider snapshots against an EnvSync schema.
+/// </summary>
 public sealed class SchemaValidator
 {
     /// <summary>
     /// Validates a provider snapshot against the declared schema.
     /// </summary>
+    /// <param name="schema">The schema to validate against.</param>
+    /// <param name="snapshot">The provider snapshot to validate.</param>
+    /// <returns>The validation result.</returns>
     public ValidationResult Validate(EnvSchema schema, EnvironmentSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(schema);

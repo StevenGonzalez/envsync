@@ -8,6 +8,9 @@ using Sodium;
 
 namespace EnvSync.Core.Providers.GitHub;
 
+/// <summary>
+/// Reads GitHub Actions variables and secrets and writes values back to repository-level settings.
+/// </summary>
 public sealed class GitHubActionsProvider : IEnvironmentProvider, IDisposable
 {
     private const string ApiVersion = "2022-11-28";
@@ -19,6 +22,12 @@ public sealed class GitHubActionsProvider : IEnvironmentProvider, IDisposable
     private readonly string _token;
     private readonly bool _ownsHttpClient;
 
+    /// <summary>
+    /// Creates a GitHub Actions provider for a repository.
+    /// </summary>
+    /// <param name="repository">The GitHub repository to read and write.</param>
+    /// <param name="token">A GitHub token with Actions variable and secret permissions.</param>
+    /// <param name="httpClient">An optional HTTP client for testing or advanced hosting scenarios.</param>
     public GitHubActionsProvider(GitHubRepositoryReference repository, string token, HttpClient? httpClient = null)
     {
         ArgumentNullException.ThrowIfNull(repository);
@@ -30,14 +39,19 @@ public sealed class GitHubActionsProvider : IEnvironmentProvider, IDisposable
         _ownsHttpClient = httpClient is null;
     }
 
+    /// <summary>
+    /// Gets the GitHub repository reference.
+    /// </summary>
     public GitHubRepositoryReference Repository { get; }
 
+    /// <inheritdoc />
     public string Description => $"github:{Repository}";
 
     // Convenience property to avoid repeating the owner/repo path in every endpoint string.
     private string RepoPath =>
         $"{Uri.EscapeDataString(Repository.Owner)}/{Uri.EscapeDataString(Repository.Repository)}";
 
+    /// <inheritdoc />
     public async Task<EnvironmentSnapshot> ReadAsync(CancellationToken cancellationToken = default)
     {
         var variables = await GetVariablesAsync(cancellationToken).ConfigureAwait(false);
@@ -57,6 +71,7 @@ public sealed class GitHubActionsProvider : IEnvironmentProvider, IDisposable
         return new EnvironmentSnapshot(Description, values.OrderBy(static value => value.Key, StringComparer.Ordinal));
     }
 
+    /// <inheritdoc />
     public async Task<ProviderWriteResult> WriteAsync(IReadOnlyCollection<ResolvedEnvironmentValue> values, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(values);
@@ -255,6 +270,7 @@ public sealed class GitHubActionsProvider : IEnvironmentProvider, IDisposable
 
     private Uri BuildUri(string relativePath) => new($"https://api.github.com{relativePath}", UriKind.Absolute);
 
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_ownsHttpClient)

@@ -11,9 +11,7 @@ public sealed class VaultKvProviderTests
     private static readonly VaultKvReference Reference = new("http://127.0.0.1:8200", "secret", "myapp/production");
     private const string Token = "s.test-token";
 
-    // -------------------------------------------------------------------------
     // ReadAsync
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task ReadAsync_ReturnsAllKeyValuesAsAvailable()
@@ -63,9 +61,7 @@ public sealed class VaultKvProviderTests
         Assert.Equal("/v1/secret/data/myapp/production", handler.SentRequests[0].RequestUri!.AbsolutePath);
     }
 
-    // -------------------------------------------------------------------------
     // WriteAsync
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task WriteAsync_MergesNewValuesWithExistingSecret()
@@ -166,9 +162,7 @@ public sealed class VaultKvProviderTests
         Assert.Equal("new-value", data.GetProperty("NEW_KEY").GetString());
     }
 
-    // -------------------------------------------------------------------------
     // Description
-    // -------------------------------------------------------------------------
 
     [Fact]
     public void Description_IncludesMountAndPath()
@@ -177,9 +171,7 @@ public sealed class VaultKvProviderTests
         Assert.Equal("vault:secret/myapp/production", provider.Description);
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     private static string VaultReadBody(Dictionary<string, string> data)
     {

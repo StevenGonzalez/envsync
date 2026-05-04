@@ -1,0 +1,119 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release guardrails
+        id: guardrails
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${NUGET_API_KEY}" ]]; then
+            echo "Missing required repository secret: NUGET_API_KEY"
+            exit 1
+          fi
+
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "Tag '${GITHUB_REF_NAME}' is not valid SemVer with 'v' prefix."
+            exit 1
+          fi
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAGGED_COMMIT="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+
+          git fetch origin "+refs/heads/main:refs/remotes/origin/main" --tags --force || true
+          git fetch origin "+refs/heads/master:refs/remotes/origin/master" --tags --force || true
+
+          if git show-ref --verify --quiet refs/remotes/origin/main; then
+            BASE_BRANCH="origin/main"
+          elif git show-ref --verify --quiet refs/remotes/origin/master; then
+            BASE_BRANCH="origin/master"
+          else
+            echo "Neither origin/main nor origin/master exists."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "${TAGGED_COMMIT}" "${BASE_BRANCH}"; then
+            echo "Tagged commit is not contained in ${BASE_BRANCH}."
+            echo "Create release tags from your primary branch history only."
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tagged_commit=${TAGGED_COMMIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore EnvSync.slnx
+
+      - name: Verify formatting
+        run: dotnet format EnvSync.slnx --verify-no-changes --verbosity minimal
+
+      - name: Test
+        run: dotnet test EnvSync.slnx --no-restore --configuration Release
+
+      - name: Audit vulnerable packages
+        run: dotnet list EnvSync.slnx package --vulnerable --include-transitive
+
+      - name: Pack tool
+        run: >
+          dotnet pack src/EnvSync.Cli/EnvSync.Cli.csproj
+          --configuration Release
+          --output artifacts/packages
+          /p:ContinuousIntegrationBuild=true
+          /p:Version=${{ steps.guardrails.outputs.version }}
+
+      - name: Publish to NuGet
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          packages=(artifacts/packages/*.nupkg)
+          if (( ${#packages[@]} == 0 )); then
+            echo "No NuGet packages were produced."
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            dotnet nuget push "$package" \
+              --source "https://api.nuget.org/v3/index.json" \
+              --api-key "${NUGET_API_KEY}" \
+              --skip-duplicate
+          done
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/packages/*.nupkg

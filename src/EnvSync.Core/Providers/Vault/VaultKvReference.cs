@@ -5,6 +5,12 @@ namespace EnvSync.Core.Providers.Vault;
 /// </summary>
 public sealed record VaultKvReference
 {
+    /// <summary>
+    /// Creates a Vault KV v2 secret reference.
+    /// </summary>
+    /// <param name="address">The absolute Vault server address.</param>
+    /// <param name="mount">The KV v2 engine mount path.</param>
+    /// <param name="secretPath">The path within the mount.</param>
     public VaultKvReference(string address, string mount, string secretPath)
     {
         if (!Uri.TryCreate(address, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Scheme))
@@ -33,7 +39,9 @@ public sealed record VaultKvReference
     /// </summary>
     public string Address { get; init; }
 
-    /// <summary>The KV v2 engine mount path, e.g. <c>secret</c>.</summary>
+    /// <summary>
+    /// Gets the KV v2 engine mount path, e.g. <c>secret</c>.
+    /// </summary>
     public string Mount { get; init; }
 
     /// <summary>
@@ -42,5 +50,6 @@ public sealed record VaultKvReference
     /// </summary>
     public string SecretPath { get; init; }
 
+    /// <inheritdoc />
     public override string ToString() => $"{Mount}/{SecretPath}";
 }

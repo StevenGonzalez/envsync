@@ -1,3 +1,4 @@
+using System.Reflection;
 using EnvSync.Core.CodeGeneration;
 using EnvSync.Core.Diffing;
 using EnvSync.Core.Model;
@@ -38,6 +39,12 @@ internal sealed class CliApplication
             if (args.Length == 0 || IsHelpCommand(args[0]))
             {
                 await WriteHelpAsync().ConfigureAwait(false);
+                return ExitCodes.Success;
+            }
+
+            if (args.Length == 1 && IsVersionCommand(args[0]))
+            {
+                await _output.WriteLineAsync($"EnvSync {GetVersion()}").ConfigureAwait(false);
                 return ExitCodes.Success;
             }
 
@@ -549,6 +556,26 @@ internal sealed class CliApplication
         string.Equals(arg, "help", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(arg, "--help", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(arg, "-h", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVersionCommand(string arg) =>
+        string.Equals(arg, "version", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(arg, "--version", StringComparison.OrdinalIgnoreCase);
+
+    private static string GetVersion()
+    {
+        var assembly = typeof(CliApplication).Assembly;
+        var version = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return assembly.GetName().Version?.ToString() ?? "unknown";
+        }
+
+        var metadataIndex = version.IndexOf('+', StringComparison.Ordinal);
+        return metadataIndex > 0 ? version[..metadataIndex] : version;
+    }
 
     private async Task WriteHelpAsync()
     {

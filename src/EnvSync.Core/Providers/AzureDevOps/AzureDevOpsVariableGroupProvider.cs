@@ -20,6 +20,12 @@ public sealed class AzureDevOpsVariableGroupProvider : IEnvironmentProvider, IDi
     private readonly string _encodedPat;
     private readonly bool _ownsHttpClient;
 
+    /// <summary>
+    /// Creates an Azure DevOps variable group provider.
+    /// </summary>
+    /// <param name="variableGroup">The variable group to read and write.</param>
+    /// <param name="personalAccessToken">A personal access token with variable group permissions.</param>
+    /// <param name="httpClient">An optional HTTP client for testing or advanced hosting scenarios.</param>
     public AzureDevOpsVariableGroupProvider(
         AzureDevOpsVariableGroupReference variableGroup,
         string personalAccessToken,
@@ -35,10 +41,15 @@ public sealed class AzureDevOpsVariableGroupProvider : IEnvironmentProvider, IDi
         _ownsHttpClient = httpClient is null;
     }
 
+    /// <summary>
+    /// Gets the Azure DevOps variable group reference.
+    /// </summary>
     public AzureDevOpsVariableGroupReference VariableGroup { get; }
 
+    /// <inheritdoc />
     public string Description => $"azuredevops:{VariableGroup}";
 
+    /// <inheritdoc />
     public async Task<EnvironmentSnapshot> ReadAsync(CancellationToken cancellationToken = default)
     {
         var group = await GetVariableGroupAsync(cancellationToken).ConfigureAwait(false);
@@ -50,6 +61,7 @@ public sealed class AzureDevOpsVariableGroupProvider : IEnvironmentProvider, IDi
         return new EnvironmentSnapshot(Description, values);
     }
 
+    /// <inheritdoc />
     public async Task<ProviderWriteResult> WriteAsync(
         IReadOnlyCollection<ResolvedEnvironmentValue> values,
         CancellationToken cancellationToken = default)
@@ -169,6 +181,7 @@ public sealed class AzureDevOpsVariableGroupProvider : IEnvironmentProvider, IDi
             UriKind.Absolute);
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_ownsHttpClient)

@@ -199,13 +199,31 @@ The core library has no dependency on the CLI. Adding a new provider means imple
 dotnet test EnvSync.slnx
 ```
 
-CI runs restore, formatting verification, tests, package vulnerability audit, and an outdated-package listing on pushes and pull requests.
+## Install
 
-Release and provider smoke-test notes live in [`docs/next-steps.md`](docs/next-steps.md).
+EnvSync is packaged as a .NET global tool. Install it from NuGet with the .NET SDK.
 
-## Install as a global tool
+### Recommended (NuGet)
 
 ```powershell
-dotnet pack src/EnvSync.Cli/EnvSync.Cli.csproj -o artifacts/packages
-dotnet tool install --global --add-source artifacts/packages EnvSync
+dotnet tool install --global EnvSync
+```
+
+Then verify:
+
+```powershell
+envsync --version
+envsync --help
+```
+
+### Update
+
+```powershell
+dotnet tool update --global EnvSync
+```
+
+### Uninstall
+
+```powershell
+dotnet tool uninstall --global EnvSync
 ```

@@ -2,8 +2,18 @@ using EnvSync.Core.Model;
 
 namespace EnvSync.Core.Diffing;
 
+/// <summary>
+/// Compares two provider snapshots using schema order and schema awareness.
+/// </summary>
 public sealed class SchemaDiffEngine
 {
+    /// <summary>
+    /// Computes a schema-aware diff between two environment snapshots.
+    /// </summary>
+    /// <param name="schema">The schema that determines managed keys and output order.</param>
+    /// <param name="left">The left-side snapshot.</param>
+    /// <param name="right">The right-side snapshot.</param>
+    /// <returns>The diff result.</returns>
     public DiffResult Diff(EnvSchema schema, EnvironmentSnapshot left, EnvironmentSnapshot right)
     {
         ArgumentNullException.ThrowIfNull(schema);

@@ -5,6 +5,10 @@ namespace EnvSync.Core.Providers.AzureKeyVault;
 /// </summary>
 public sealed record AzureKeyVaultReference
 {
+    /// <summary>
+    /// Creates an Azure Key Vault reference.
+    /// </summary>
+    /// <param name="vaultName">The short Key Vault name.</param>
     public AzureKeyVaultReference(string vaultName)
     {
         if (!IsValidVaultName(vaultName))
@@ -23,9 +27,12 @@ public sealed record AzureKeyVaultReference
     /// </summary>
     public string VaultName { get; init; }
 
-    /// <summary>Gets the fully-qualified Azure Key Vault URI.</summary>
+    /// <summary>
+    /// Gets the fully-qualified Azure Key Vault URI.
+    /// </summary>
     public string VaultUri => $"https://{VaultName}.vault.azure.net";
 
+    /// <inheritdoc />
     public override string ToString() => VaultName;
 
     private static bool IsValidVaultName(string value)

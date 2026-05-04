@@ -7,6 +7,11 @@ namespace EnvSync.Core.Providers.AwsSsm;
 /// </summary>
 public sealed record AwsSsmReference
 {
+    /// <summary>
+    /// Creates an AWS SSM reference.
+    /// </summary>
+    /// <param name="pathPrefix">The SSM path prefix.</param>
+    /// <param name="region">An optional AWS region override.</param>
     public AwsSsmReference(string pathPrefix, string? region = null)
     {
         if (string.IsNullOrWhiteSpace(pathPrefix) || !pathPrefix.StartsWith("/", StringComparison.Ordinal))
@@ -31,5 +36,6 @@ public sealed record AwsSsmReference
     /// </summary>
     public string? Region { get; init; }
 
+    /// <inheritdoc />
     public override string ToString() => PathPrefix;
 }

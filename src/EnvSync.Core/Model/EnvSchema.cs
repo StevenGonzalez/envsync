@@ -2,11 +2,18 @@ using System.Collections.ObjectModel;
 
 namespace EnvSync.Core.Model;
 
+/// <summary>
+/// Represents the declared environment variable schema.
+/// </summary>
 public sealed class EnvSchema
 {
     private readonly IReadOnlyList<EnvVariableDefinition> _definitions;
     private readonly IReadOnlyDictionary<string, EnvVariableDefinition> _definitionMap;
 
+    /// <summary>
+    /// Creates a schema from ordered variable definitions.
+    /// </summary>
+    /// <param name="definitions">The schema variable definitions.</param>
     public EnvSchema(IEnumerable<EnvVariableDefinition> definitions)
     {
         ArgumentNullException.ThrowIfNull(definitions);
@@ -33,9 +40,21 @@ public sealed class EnvSchema
             orderedDefinitions.ToDictionary(static definition => definition.Name, StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// Gets the schema definitions in declaration order.
+    /// </summary>
     public IReadOnlyList<EnvVariableDefinition> Definitions => _definitions;
 
+    /// <summary>
+    /// Gets schema definitions keyed by environment variable name.
+    /// </summary>
     public IReadOnlyDictionary<string, EnvVariableDefinition> DefinitionMap => _definitionMap;
 
+    /// <summary>
+    /// Attempts to get a schema definition by environment variable key.
+    /// </summary>
+    /// <param name="key">The environment variable key.</param>
+    /// <param name="definition">The definition when found.</param>
+    /// <returns><see langword="true"/> when the definition exists; otherwise <see langword="false"/>.</returns>
     public bool TryGetDefinition(string key, out EnvVariableDefinition definition) => _definitionMap.TryGetValue(key, out definition!);
 }

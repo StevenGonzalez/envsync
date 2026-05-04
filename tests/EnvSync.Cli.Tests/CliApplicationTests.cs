@@ -14,9 +14,7 @@ public sealed class CliApplicationTests : IDisposable
 
     public CliApplicationTests() => Directory.CreateDirectory(_dir);
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     private string TempPath(string filename) => Path.Combine(_dir, filename);
 
@@ -35,9 +33,7 @@ public sealed class CliApplicationTests : IDisposable
     private async Task WriteEnvAsync(string filename, string content) =>
         await File.WriteAllTextAsync(TempPath(filename), content);
 
-    // -------------------------------------------------------------------------
     // Help / unknown command
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task RunAsync_WithNoArgs_PrintsHelp_AndReturnsSuccess()
@@ -60,6 +56,17 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Contains("Usage:", stdout.ToString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("version")]
+    [InlineData("--version")]
+    public async Task RunAsync_WithVersionArg_PrintsVersion_AndReturnsSuccess(string arg)
+    {
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync([arg]);
+        Assert.Equal(0, code);
+        Assert.StartsWith("EnvSync ", stdout.ToString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task RunAsync_UnknownCommand_WritesError_AndReturnsCode1()
     {
@@ -79,9 +86,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Contains("Unknown option", stderr.ToString(), StringComparison.Ordinal);
     }
 
-    // -------------------------------------------------------------------------
     // init
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Init_CreatesSchemaFile()
@@ -115,9 +120,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.DoesNotContain("old: content", written, StringComparison.Ordinal);
     }
 
-    // -------------------------------------------------------------------------
     // validate
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Validate_ReturnsSuccess_WhenAllRequiredValuesPresent()
@@ -151,9 +154,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Equal(0, code);
     }
 
-    // -------------------------------------------------------------------------
     // diff
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Diff_ReturnsDriftCode_WhenProvidersDiffer()
@@ -216,9 +217,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Contains("Unknown option", stderr.ToString(), StringComparison.Ordinal);
     }
 
-    // -------------------------------------------------------------------------
     // pull / push
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Pull_CopiesValuesFromSourceToTarget()
@@ -249,9 +248,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Contains("--from", stderr.ToString(), StringComparison.Ordinal);
     }
 
-    // -------------------------------------------------------------------------
     // generate
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Generate_TypeScript_WritesFile()
@@ -300,9 +297,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Contains("typescript", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
-    // -------------------------------------------------------------------------
     // Provider spec parsing errors
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Validate_BadGitHubSpec_ReturnsCode1WithGuidance()
@@ -431,9 +426,7 @@ public sealed class CliApplicationTests : IDisposable
         Assert.Contains("azurekeyvault:", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
-    // -------------------------------------------------------------------------
     // --dry-run
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Pull_DryRun_DoesNotWriteTargetFile()
@@ -503,9 +496,7 @@ public sealed class CliApplicationTests : IDisposable
         }
     }
 
-    // -------------------------------------------------------------------------
     // IDisposable
-    // -------------------------------------------------------------------------
 
     public void Dispose()
     {

@@ -28,6 +28,12 @@ public sealed class VaultKvProvider : IEnvironmentProvider, IDisposable
     private readonly string _token;
     private readonly bool _ownsHttpClient;
 
+    /// <summary>
+    /// Creates a HashiCorp Vault KV v2 provider.
+    /// </summary>
+    /// <param name="reference">The Vault address, mount, and secret path.</param>
+    /// <param name="token">A Vault token with read and write access to the secret path.</param>
+    /// <param name="httpClient">An optional HTTP client for testing or advanced hosting scenarios.</param>
     public VaultKvProvider(VaultKvReference reference, string token, HttpClient? httpClient = null)
     {
         ArgumentNullException.ThrowIfNull(reference);
@@ -39,10 +45,15 @@ public sealed class VaultKvProvider : IEnvironmentProvider, IDisposable
         _ownsHttpClient = httpClient is null;
     }
 
+    /// <summary>
+    /// Gets the Vault KV reference.
+    /// </summary>
     public VaultKvReference Reference { get; }
 
+    /// <inheritdoc />
     public string Description => $"vault:{Reference}";
 
+    /// <inheritdoc />
     public async Task<EnvironmentSnapshot> ReadAsync(CancellationToken cancellationToken = default)
     {
         using var response = await SendAsync(
@@ -60,6 +71,7 @@ public sealed class VaultKvProvider : IEnvironmentProvider, IDisposable
         return new EnvironmentSnapshot(Description, values);
     }
 
+    /// <inheritdoc />
     public async Task<ProviderWriteResult> WriteAsync(
         IReadOnlyCollection<ResolvedEnvironmentValue> values,
         CancellationToken cancellationToken = default)
@@ -186,6 +198,7 @@ public sealed class VaultKvProvider : IEnvironmentProvider, IDisposable
                ?? throw new InvalidOperationException("Vault API returned an empty response body.");
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_ownsHttpClient)

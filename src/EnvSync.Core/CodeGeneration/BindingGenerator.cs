@@ -5,11 +5,19 @@ using EnvSync.Core.Model;
 
 namespace EnvSync.Core.CodeGeneration;
 
+/// <summary>
+/// Generates strongly-typed source files from an environment schema.
+/// </summary>
 public sealed class BindingGenerator
 {
     /// <summary>
     /// Generates a typed binding file for the requested language.
     /// </summary>
+    /// <param name="schema">The schema to generate bindings from.</param>
+    /// <param name="language">The binding language to generate.</param>
+    /// <param name="rootName">The generated root type or interface name.</param>
+    /// <param name="scope">The optional C# namespace. Ignored for TypeScript generation.</param>
+    /// <returns>The generated binding file.</returns>
     public GeneratedBindingFile Generate(EnvSchema schema, BindingLanguage language, string rootName = "EnvSyncEnvironment", string? scope = null)
     {
         ArgumentNullException.ThrowIfNull(schema);

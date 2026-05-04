@@ -6,6 +6,9 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace EnvSync.Core.Schema;
 
+/// <summary>
+/// Loads and parses EnvSync schema files.
+/// </summary>
 public sealed class SchemaLoader
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -18,6 +21,8 @@ public sealed class SchemaLoader
     /// <summary>
     /// Loads an environment schema from disk.
     /// </summary>
+    /// <param name="path">The schema file path.</param>
+    /// <returns>The parsed environment schema.</returns>
     public EnvSchema Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -34,6 +39,9 @@ public sealed class SchemaLoader
     /// <summary>
     /// Parses a schema payload that has already been read into memory.
     /// </summary>
+    /// <param name="content">The schema content.</param>
+    /// <param name="format">The schema format.</param>
+    /// <returns>The parsed environment schema.</returns>
     public EnvSchema Parse(string content, SchemaFormat format)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(content);
@@ -62,6 +70,8 @@ public sealed class SchemaLoader
     /// <summary>
     /// Infers the schema format from the file extension.
     /// </summary>
+    /// <param name="path">The schema file path.</param>
+    /// <returns>The detected schema format.</returns>
     public static SchemaFormat DetectFormat(string path)
     {
         return Path.GetExtension(path).ToLowerInvariant() switch

@@ -14,9 +14,7 @@ public sealed class AzureKeyVaultProviderTests
     private static readonly AzureKeyVaultReference VaultRef = new("my-vault");
     private const string VaultBaseUri = "https://my-vault.vault.azure.net";
 
-    // -------------------------------------------------------------------------
     // ReadAsync
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task ReadAsync_ReturnsAvailableValue_ForEnabledSecret()
@@ -67,7 +65,7 @@ public sealed class AzureKeyVaultProviderTests
         var snapshot = await provider.ReadAsync();
 
         Assert.True(snapshot.Values.ContainsKey("DATABASE_URL"),
-            "Key 'DATABASE_URL' expected after hyphen→underscore translation.");
+            "Key 'DATABASE_URL' expected after hyphen-to-underscore translation.");
         Assert.False(snapshot.Values.ContainsKey("DATABASE-URL"),
             "Raw hyphenated vault name must not be exposed.");
     }
@@ -100,12 +98,12 @@ public sealed class AzureKeyVaultProviderTests
 
         // The FIFO queue serves requests in order; URL routes serve before the queue.
         // Sequence:
-        //   1. GET /secrets/?api-version=... → page 1 list (from FIFO queue)
-        //   2. GET /secrets/PAGE1-KEY/...    → secret body  (URL route)
-        //   3. GET .../skiptoken=abc...      → page 2 list  (URL route)
-        //   4. GET /secrets/PAGE2-KEY/...    → secret body  (URL route)
+        //   1. GET /secrets/?api-version=... -> page 1 list (from FIFO queue)
+        //   2. GET /secrets/PAGE1-KEY/...    -> secret body  (URL route)
+        //   3. GET .../skiptoken=abc...      -> page 2 list  (URL route)
+        //   4. GET /secrets/PAGE2-KEY/...    -> secret body  (URL route)
 
-        // Page 1 list — served first via FIFO.
+        // Page 1 list served first via FIFO.
         handler.Enqueue(HttpStatusCode.OK,
             $"{{\"value\":[{{\"id\":\"{VaultBaseUri}/secrets/PAGE1-KEY\"," +
             $"\"attributes\":{{\"enabled\":true}}}}]," +
@@ -121,15 +119,13 @@ public sealed class AzureKeyVaultProviderTests
         var snapshot = await provider.ReadAsync();
 
         Assert.Equal(2, snapshot.Values.Count);
-        Assert.True(snapshot.Values.ContainsKey("PAGE1_KEY"), "PAGE1_KEY should be present after hyphen→underscore.");
+        Assert.True(snapshot.Values.ContainsKey("PAGE1_KEY"), "PAGE1_KEY should be present after hyphen-to-underscore translation.");
         Assert.True(snapshot.Values.ContainsKey("PAGE2_KEY"), "PAGE2_KEY should be present from the second page.");
         Assert.Equal("value-from-page-1", snapshot.Values["PAGE1_KEY"].Value);
         Assert.Equal("value-from-page-2", snapshot.Values["PAGE2_KEY"].Value);
     }
 
-    // -------------------------------------------------------------------------
     // WriteAsync
-    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task WriteAsync_TranslatesUnderscoresToHyphens()
@@ -178,9 +174,7 @@ public sealed class AzureKeyVaultProviderTests
         Assert.Equal(3, result.UpdatedCount);
     }
 
-    // -------------------------------------------------------------------------
     // Description
-    // -------------------------------------------------------------------------
 
     [Fact]
     public void Description_IncludesVaultName()
@@ -189,9 +183,7 @@ public sealed class AzureKeyVaultProviderTests
         Assert.Equal("azurekeyvault:acme-vault", provider.Description);
     }
 
-    // -------------------------------------------------------------------------
     // Helpers
-    // -------------------------------------------------------------------------
 
     /// <summary>
     /// Builds a provider backed by a queued HTTP handler. Uses a real <see cref="SecretClient"/>
@@ -253,7 +245,9 @@ public sealed class AzureKeyVaultProviderTests
 
         public void Enqueue(HttpStatusCode status, string body) => _queue.Enqueue((status, body));
 
-        /// <summary>Enqueues a response that is only served when the request URL contains <paramref name="urlPattern"/>.</summary>
+        /// <summary>
+        /// Enqueues a response that is only served when the request URL contains <paramref name="urlPattern"/>.
+        /// </summary>
         public void EnqueueForUrl(string urlPattern, HttpStatusCode status, string body) =>
             _urlRoutes.Add((urlPattern, status, body));
 
