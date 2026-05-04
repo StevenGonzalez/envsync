@@ -65,4 +65,88 @@ public sealed class SchemaValidatorTests
         Assert.Contains("<redacted>", issue.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("super-secret-value", issue.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Validate_ReturnsError_ForInvalidBoolean()
+    {
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "DEBUG", Type = EnvValueType.Boolean, Required = true },
+        ]);
+        var snapshot = new EnvironmentSnapshot("local", [
+            EnvironmentValue.Available("DEBUG", "yes"),
+        ]);
+
+        var result = _validator.Validate(schema, snapshot);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(result.Issues, issue => issue.Key == "DEBUG" && issue.Code == "invalid_type");
+    }
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    [InlineData("True")]
+    [InlineData("False")]
+    public void Validate_AcceptsValidBooleanValues(string value)
+    {
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "DEBUG", Type = EnvValueType.Boolean, Required = true },
+        ]);
+        var snapshot = new EnvironmentSnapshot("local", [
+            EnvironmentValue.Available("DEBUG", value),
+        ]);
+
+        var result = _validator.Validate(schema, snapshot);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
+    public void Validate_ReturnsError_ForInvalidNumber()
+    {
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "PORT", Type = EnvValueType.Number, Required = true },
+        ]);
+        var snapshot = new EnvironmentSnapshot("local", [
+            EnvironmentValue.Available("PORT", "not-a-number"),
+        ]);
+
+        var result = _validator.Validate(schema, snapshot);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(result.Issues, issue => issue.Key == "PORT" && issue.Code == "invalid_type");
+    }
+
+    [Fact]
+    public void Validate_ReturnsSuccess_WhenAllValuesAreValid()
+    {
+        var snapshot = new EnvironmentSnapshot("local", [
+            EnvironmentValue.Available("APP_ENV", "dev"),
+            EnvironmentValue.Available("PORT", "8080"),
+            EnvironmentValue.Available("DATABASE_URL", "postgres://localhost/db"),
+        ]);
+
+        var result = _validator.Validate(Schema, snapshot);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
+    public void Validate_ReturnsNoError_WhenOptionalVariableIsAbsent()
+    {
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "APP_ENV", Type = EnvValueType.String, Required = true },
+            new EnvVariableDefinition { Name = "DEBUG", Type = EnvValueType.Boolean, Required = false },
+        ]);
+        var snapshot = new EnvironmentSnapshot("local", [
+            EnvironmentValue.Available("APP_ENV", "dev"),
+        ]);
+
+        var result = _validator.Validate(schema, snapshot);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Issues);
+    }
 }

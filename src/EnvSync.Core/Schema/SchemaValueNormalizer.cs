@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using EnvSync.Core.Model;
 
 namespace EnvSync.Core.Schema;
@@ -12,12 +13,31 @@ internal static class SchemaValueNormalizer
             throw new SchemaParseException("Schema values cannot be null.");
         }
 
+        // System.Text.Json deserializes JSON values in object? properties as JsonElement.
+        // Unwrap them to native types so the type-specific normalizers handle them uniformly.
+        if (rawValue is JsonElement jsonElement)
+        {
+            rawValue = UnwrapJsonElement(jsonElement);
+        }
+
         return targetType switch
         {
             EnvValueType.String => rawValue.ToString() ?? string.Empty,
             EnvValueType.Number => NormalizeNumber(rawValue),
             EnvValueType.Boolean => NormalizeBoolean(rawValue),
             _ => throw new SchemaParseException($"Unsupported schema value type '{targetType}'."),
+        };
+    }
+
+    private static object UnwrapJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString() ?? string.Empty,
+            JsonValueKind.Number => element.TryGetInt64(out var longValue) ? (object)longValue : element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => element.ToString(),
         };
     }
 

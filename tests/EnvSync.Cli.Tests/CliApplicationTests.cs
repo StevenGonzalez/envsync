@@ -534,6 +534,183 @@ public sealed class CliApplicationTests : IDisposable
 
     // IDisposable
 
+    // push command
+
+    [Fact]
+    public async Task Push_CopiesValuesFromSourceToTarget()
+    {
+        await WriteSchemaAsync("APP_ENV:\n  type: string\n  required: true\n");
+        await WriteEnvAsync("source.env", "APP_ENV=staging\n");
+        var targetPath = TempPath("target.env");
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync([
+            "push",
+            "--schema", SchemaPath,
+            "--from", $"local:{TempPath("source.env")}",
+            "--to", $"local:{targetPath}",
+        ]);
+        Assert.Equal(0, code);
+        Assert.Contains("1 values written", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("APP_ENV=staging", await File.ReadAllTextAsync(targetPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Push_ReturnsZeroWritten_WhenSourceAndTargetAlreadyMatch()
+    {
+        await WriteSchemaAsync("APP_ENV:\n  type: string\n  required: true\n");
+        await WriteEnvAsync("source.env", "APP_ENV=prod\n");
+        await WriteEnvAsync("target.env", "APP_ENV=prod\n");
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync([
+            "push",
+            "--schema", SchemaPath,
+            "--from", $"local:{TempPath("source.env")}",
+            "--to", $"local:{TempPath("target.env")}",
+        ]);
+        Assert.Equal(0, code);
+        Assert.Contains("0 values written", stdout.ToString(), StringComparison.Ordinal);
+    }
+
+    // diff --all
+
+    [Fact]
+    public async Task Diff_All_ShowsMatchingEntriesToo()
+    {
+        await WriteSchemaAsync("PORT:\n  type: number\n");
+        await WriteEnvAsync("left.env", "PORT=3000\n");
+        await WriteEnvAsync("right.env", "PORT=3000\n");
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync([
+            "diff",
+            "--schema", SchemaPath,
+            "--left", $"local:{TempPath("left.env")}",
+            "--right", $"local:{TempPath("right.env")}",
+            "--all",
+        ]);
+        Assert.Equal(0, code);
+        Assert.Contains("PORT", stdout.ToString(), StringComparison.Ordinal);
+    }
+
+    // generate --name and --namespace
+
+    [Fact]
+    public async Task Generate_CSharp_RespectsCustomNameAndNamespace()
+    {
+        await WriteSchemaAsync("APP_ENV:\n  type: string\n  required: true\n");
+        var outputPath = TempPath("CustomEnv.g.cs");
+        var (app, _, _) = BuildApp();
+        var code = await app.RunAsync([
+            "generate",
+            "--schema", SchemaPath,
+            "--language", "csharp",
+            "--output", outputPath,
+            "--name", "MyEnvConfig",
+            "--namespace", "MyApp.Config",
+        ]);
+        Assert.Equal(0, code);
+        var content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("MyEnvConfig", content, StringComparison.Ordinal);
+        Assert.Contains("MyApp.Config", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generate_TypeScript_RespectsCustomName()
+    {
+        await WriteSchemaAsync("PORT:\n  type: number\n");
+        var outputPath = TempPath("env.ts");
+        var (app, _, _) = BuildApp();
+        var code = await app.RunAsync([
+            "generate",
+            "--schema", SchemaPath,
+            "--language", "typescript",
+            "--output", outputPath,
+            "--name", "AppEnvironment",
+        ]);
+        Assert.Equal(0, code);
+        var content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("AppEnvironment", content, StringComparison.Ordinal);
+    }
+
+    // JSON schema
+
+    [Fact]
+    public async Task Validate_WorksWithJsonSchema()
+    {
+        var jsonSchema = """
+            {
+              "APP_ENV": { "type": "string", "required": true }
+            }
+            """;
+        var schemaPath = TempPath("envsync.schema.json");
+        await File.WriteAllTextAsync(schemaPath, jsonSchema);
+        await WriteEnvAsync(".env", "APP_ENV=dev\n");
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync([
+            "validate",
+            "--schema", schemaPath,
+            "--provider", $"local:{TempPath(".env")}",
+        ]);
+        Assert.Equal(0, code);
+        Assert.Contains("succeeded", stdout.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // init --format json
+
+    [Fact]
+    public async Task Init_JsonFormat_CreatesJsonSchemaFile()
+    {
+        var path = TempPath("envsync.schema.json");
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync(["init", "--schema", path, "--format", "json"]);
+        Assert.Equal(0, code);
+        Assert.True(File.Exists(path));
+        var content = await File.ReadAllTextAsync(path);
+        Assert.StartsWith("{", content.TrimStart(), StringComparison.Ordinal);
+    }
+
+    // inline comment support
+
+    [Fact]
+    public async Task Validate_InlineCommentsInDotenv_DoNotCorruptValues()
+    {
+        await WriteSchemaAsync("PORT:\n  type: number\n  required: true\n");
+        await WriteEnvAsync(".env", "PORT=3000 # HTTP port\n");
+        var (app, stdout, _) = BuildApp();
+        var code = await app.RunAsync([
+            "validate",
+            "--schema", SchemaPath,
+            "--provider", $"local:{TempPath(".env")}",
+        ]);
+        Assert.Equal(0, code);
+        Assert.Contains("succeeded", stdout.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // generate emits descriptions
+
+    [Fact]
+    public async Task Generate_CSharp_EmitsXmlDocForDescription()
+    {
+        await WriteSchemaAsync("APP_ENV:\n  type: string\n  required: true\n  description: Deployment environment\n");
+        var outputPath = TempPath("Env.g.cs");
+        var (app, _, _) = BuildApp();
+        await app.RunAsync(["generate", "--schema", SchemaPath, "--language", "csharp", "--output", outputPath]);
+        var content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("Deployment environment", content, StringComparison.Ordinal);
+        Assert.Contains("/// <summary>", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generate_TypeScript_EmitsJsDocForDescription()
+    {
+        await WriteSchemaAsync("APP_ENV:\n  type: string\n  required: true\n  description: Deployment environment\n");
+        var outputPath = TempPath("env.ts");
+        var (app, _, _) = BuildApp();
+        await app.RunAsync(["generate", "--schema", SchemaPath, "--language", "typescript", "--output", outputPath]);
+        var content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("Deployment environment", content, StringComparison.Ordinal);
+        Assert.Contains("/**", content, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_dir))

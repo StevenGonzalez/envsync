@@ -236,255 +236,191 @@ internal sealed class CliApplication
         return _schemaLoader.Load(schemaPath);
     }
 
+    // Parses a provider spec string into a typed record. All format validation happens here so
+    // CreateProviderLease and DescribeProviderSpec share a single code path.
+    private static ParsedSpec ParseProviderSpec(string spec)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(spec);
+
+        if (spec.StartsWith("local:", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = spec[6..];
+            return new ParsedSpec.Local(string.IsNullOrWhiteSpace(path) ? ".env" : path);
+        }
+
+        if (spec.StartsWith("github:", StringComparison.OrdinalIgnoreCase))
+        {
+            var repositorySpec = spec[7..];
+            var segments = repositorySpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length != 2)
+            {
+                throw new CommandLineUsageException("GitHub provider specs must use the form 'github:owner/repository'.");
+            }
+
+            try
+            {
+                return new ParsedSpec.GitHub(new GitHubRepositoryReference(segments[0], segments[1]));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new CommandLineUsageException(exception.Message);
+            }
+        }
+
+        if (spec.StartsWith("azuredevops:", StringComparison.OrdinalIgnoreCase))
+        {
+            var groupSpec = spec[12..];
+            var segments = groupSpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length != 3)
+            {
+                throw new CommandLineUsageException("Azure DevOps provider specs must use the form 'azuredevops:organization/project/groupName'.");
+            }
+
+            return new ParsedSpec.AzureDevOps(new AzureDevOpsVariableGroupReference(segments[0], segments[1], segments[2]));
+        }
+
+        if (spec.StartsWith("azureappservice:", StringComparison.OrdinalIgnoreCase))
+        {
+            var appSpec = spec["azureappservice:".Length..];
+            var segments = appSpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length is not (3 or 4))
+            {
+                throw new CommandLineUsageException(
+                    "Azure App Service provider specs must use the form 'azureappservice:subscription-id/resource-group/app-name' or 'azureappservice:subscription-id/resource-group/app-name/slot-name'.");
+            }
+
+            try
+            {
+                return new ParsedSpec.AzureAppService(new AzureAppServiceReference(
+                    segments[0],
+                    segments[1],
+                    segments[2],
+                    segments.Length == 4 ? segments[3] : null));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new CommandLineUsageException(exception.Message);
+            }
+        }
+
+        if (spec.StartsWith("ssm:", StringComparison.OrdinalIgnoreCase))
+        {
+            var pathPrefix = spec[4..];
+            if (string.IsNullOrWhiteSpace(pathPrefix) || !pathPrefix.StartsWith("/", StringComparison.Ordinal))
+            {
+                throw new CommandLineUsageException("AWS SSM provider specs must use the form 'ssm:/path/prefix'.");
+            }
+
+            return new ParsedSpec.Ssm(pathPrefix);
+        }
+
+        if (spec.StartsWith("vault:", StringComparison.OrdinalIgnoreCase))
+        {
+            var mountAndPath = spec[6..];
+            var slashIndex = mountAndPath.IndexOf('/');
+            if (slashIndex < 1 || slashIndex == mountAndPath.Length - 1)
+            {
+                throw new CommandLineUsageException("HashiCorp Vault provider specs must use the form 'vault:mount/secret-path'.");
+            }
+
+            return new ParsedSpec.Vault(mountAndPath[..slashIndex], mountAndPath[(slashIndex + 1)..]);
+        }
+
+        if (spec.StartsWith("azurekeyvault:", StringComparison.OrdinalIgnoreCase))
+        {
+            var vaultName = spec[14..];
+            if (string.IsNullOrWhiteSpace(vaultName))
+            {
+                throw new CommandLineUsageException("Azure Key Vault provider specs must use the form 'azurekeyvault:vault-name'.");
+            }
+
+            return new ParsedSpec.AzureKeyVault(new AzureKeyVaultReference(vaultName));
+        }
+
+        var colonIndex = spec.IndexOf(':');
+        if (colonIndex > 1 || (colonIndex == 1 && !char.IsLetter(spec[0])))
+        {
+            throw new CommandLineUsageException(
+                $"Unknown provider '{spec[..colonIndex]}'. Supported providers: {SupportedProviders}.");
+        }
+
+        return new ParsedSpec.Local(spec);
+    }
+
     private ProviderLease CreateProviderLease(string spec, CommandLineOptions options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(spec);
-
-        if (spec.StartsWith("local:", StringComparison.OrdinalIgnoreCase))
+        return ParseProviderSpec(spec) switch
         {
-            var path = spec[6..];
-            return new ProviderLease(new LocalEnvFileProvider(string.IsNullOrWhiteSpace(path) ? ".env" : path));
-        }
+            ParsedSpec.Local local =>
+                new ProviderLease(new LocalEnvFileProvider(local.FilePath)),
 
-        if (spec.StartsWith("github:", StringComparison.OrdinalIgnoreCase))
-        {
-            var repositorySpec = spec[7..];
-            var segments = repositorySpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (segments.Length != 2)
-            {
-                throw new CommandLineUsageException("GitHub provider specs must use the form 'github:owner/repository'.");
-            }
+            ParsedSpec.GitHub github =>
+                new ProviderLease(new GitHubActionsProvider(github.Repository, ResolveGitHubToken(options))),
 
-            var token = options.GetOptional("github-token") ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                throw new CommandLineUsageException("GitHub operations require '--github-token' or the GITHUB_TOKEN environment variable.");
-            }
+            ParsedSpec.AzureDevOps ado =>
+                new ProviderLease(new AzureDevOpsVariableGroupProvider(ado.GroupReference, ResolveAzureDevOpsToken(options))),
 
-            return new ProviderLease(new GitHubActionsProvider(new GitHubRepositoryReference(segments[0], segments[1]), token));
-        }
+            ParsedSpec.AzureAppService appService =>
+                new ProviderLease(new AzureAppServiceProvider(appService.Reference)),
 
-        if (spec.StartsWith("azuredevops:", StringComparison.OrdinalIgnoreCase))
-        {
-            // spec format: azuredevops:organization/project/groupName
-            var groupSpec = spec[12..];
-            var segments = groupSpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (segments.Length != 3)
-            {
-                throw new CommandLineUsageException("Azure DevOps provider specs must use the form 'azuredevops:organization/project/groupName'.");
-            }
+            ParsedSpec.Ssm ssm =>
+                new ProviderLease(new AwsSsmProvider(new AwsSsmReference(ssm.PathPrefix, ResolveAwsRegion(options)))),
 
-            var token = options.GetOptional("azuredevops-token") ?? Environment.GetEnvironmentVariable("AZURE_DEVOPS_TOKEN");
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                throw new CommandLineUsageException("Azure DevOps operations require '--azuredevops-token' or the AZURE_DEVOPS_TOKEN environment variable.");
-            }
+            ParsedSpec.Vault vault =>
+                new ProviderLease(new VaultKvProvider(
+                    new VaultKvReference(ResolveVaultAddress(options), vault.Mount, vault.SecretPath),
+                    ResolveVaultToken(options))),
 
-            return new ProviderLease(new AzureDevOpsVariableGroupProvider(
-                new AzureDevOpsVariableGroupReference(segments[0], segments[1], segments[2]),
-                token));
-        }
+            ParsedSpec.AzureKeyVault akv =>
+                new ProviderLease(new AzureKeyVaultProvider(akv.Reference)),
 
-        if (spec.StartsWith("azureappservice:", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ProviderLease(new AzureAppServiceProvider(ParseAzureAppServiceReference(spec)));
-        }
-
-        if (spec.StartsWith("ssm:", StringComparison.OrdinalIgnoreCase))
-        {
-            var pathPrefix = spec[4..];
-            if (string.IsNullOrWhiteSpace(pathPrefix))
-            {
-                throw new CommandLineUsageException("AWS SSM provider specs must use the form 'ssm:/path/prefix'.");
-            }
-
-            if (!pathPrefix.StartsWith("/", StringComparison.Ordinal))
-            {
-                throw new CommandLineUsageException("AWS SSM provider specs must use the form 'ssm:/path/prefix'.");
-            }
-
-            // Region can be supplied explicitly or resolved from the AWS credential chain.
-            var region = options.GetOptional("aws-region")
-                ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
-                ?? Environment.GetEnvironmentVariable("AWS_REGION");
-
-            return new ProviderLease(new AwsSsmProvider(new AwsSsmReference(pathPrefix, region)));
-        }
-
-        if (spec.StartsWith("vault:", StringComparison.OrdinalIgnoreCase))
-        {
-            // spec format: vault:mount/secret-path
-            var mountAndPath = spec[6..];
-            var slashIndex = mountAndPath.IndexOf('/');
-            if (slashIndex < 1 || slashIndex == mountAndPath.Length - 1)
-            {
-                throw new CommandLineUsageException("HashiCorp Vault provider specs must use the form 'vault:mount/secret-path'.");
-            }
-
-            var mount = mountAndPath[..slashIndex];
-            var secretPath = mountAndPath[(slashIndex + 1)..];
-            var address = options.GetOptional("vault-address")
-                ?? Environment.GetEnvironmentVariable("VAULT_ADDR")
-                ?? "http://127.0.0.1:8200";
-
-            var vaultToken = options.GetOptional("vault-token") ?? Environment.GetEnvironmentVariable("VAULT_TOKEN");
-            if (string.IsNullOrWhiteSpace(vaultToken))
-            {
-                throw new CommandLineUsageException("Vault operations require '--vault-token' or the VAULT_TOKEN environment variable.");
-            }
-
-            return new ProviderLease(new VaultKvProvider(new VaultKvReference(address, mount, secretPath), vaultToken));
-        }
-
-        if (spec.StartsWith("azurekeyvault:", StringComparison.OrdinalIgnoreCase))
-        {
-            var vaultName = spec[14..];
-            if (string.IsNullOrWhiteSpace(vaultName))
-            {
-                throw new CommandLineUsageException("Azure Key Vault provider specs must use the form 'azurekeyvault:vault-name'.");
-            }
-
-            return new ProviderLease(new AzureKeyVaultProvider(new AzureKeyVaultReference(vaultName)));
-        }
-
-        if (LooksLikeUnknownProviderSpec(spec, out var providerName))
-        {
-            throw new CommandLineUsageException(
-                $"Unknown provider '{providerName}'. Supported providers: {SupportedProviders}.");
-        }
-
-        return new ProviderLease(new LocalEnvFileProvider(spec));
+            _ => throw new InvalidOperationException("Unhandled provider spec type."),
+        };
     }
 
-    private static string DescribeProviderSpec(string spec)
+    private static string DescribeProviderSpec(string spec) => ParseProviderSpec(spec).Description;
+
+    private static string ResolveGitHubToken(CommandLineOptions options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(spec);
-
-        if (spec.StartsWith("local:", StringComparison.OrdinalIgnoreCase))
+        var token = options.GetOptional("github-token") ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        if (string.IsNullOrWhiteSpace(token))
         {
-            var path = spec[6..];
-            return $"local:{(string.IsNullOrWhiteSpace(path) ? ".env" : path)}";
+            throw new CommandLineUsageException("GitHub operations require '--github-token' or the GITHUB_TOKEN environment variable.");
         }
 
-        if (spec.StartsWith("github:", StringComparison.OrdinalIgnoreCase))
-        {
-            var repositorySpec = spec[7..];
-            var segments = repositorySpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (segments.Length != 2)
-            {
-                throw new CommandLineUsageException("GitHub provider specs must use the form 'github:owner/repository'.");
-            }
-
-            return $"github:{new GitHubRepositoryReference(segments[0], segments[1])}";
-        }
-
-        if (spec.StartsWith("azuredevops:", StringComparison.OrdinalIgnoreCase))
-        {
-            var groupSpec = spec[12..];
-            var segments = groupSpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (segments.Length != 3)
-            {
-                throw new CommandLineUsageException("Azure DevOps provider specs must use the form 'azuredevops:organization/project/groupName'.");
-            }
-
-            return $"azuredevops:{new AzureDevOpsVariableGroupReference(segments[0], segments[1], segments[2])}";
-        }
-
-        if (spec.StartsWith("azureappservice:", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"azureappservice:{ParseAzureAppServiceReference(spec)}";
-        }
-
-        if (spec.StartsWith("ssm:", StringComparison.OrdinalIgnoreCase))
-        {
-            var pathPrefix = spec[4..];
-            if (string.IsNullOrWhiteSpace(pathPrefix))
-            {
-                throw new CommandLineUsageException("AWS SSM provider specs must use the form 'ssm:/path/prefix'.");
-            }
-
-            if (!pathPrefix.StartsWith("/", StringComparison.Ordinal))
-            {
-                throw new CommandLineUsageException("AWS SSM provider specs must use the form 'ssm:/path/prefix'.");
-            }
-
-            return $"ssm:{new AwsSsmReference(pathPrefix)}";
-        }
-
-        if (spec.StartsWith("vault:", StringComparison.OrdinalIgnoreCase))
-        {
-            var mountAndPath = spec[6..];
-            var slashIndex = mountAndPath.IndexOf('/');
-            if (slashIndex < 1 || slashIndex == mountAndPath.Length - 1)
-            {
-                throw new CommandLineUsageException("HashiCorp Vault provider specs must use the form 'vault:mount/secret-path'.");
-            }
-
-            var mount = mountAndPath[..slashIndex];
-            var secretPath = mountAndPath[(slashIndex + 1)..];
-            return $"vault:{new VaultKvReference("http://127.0.0.1:8200", mount, secretPath)}";
-        }
-
-        if (spec.StartsWith("azurekeyvault:", StringComparison.OrdinalIgnoreCase))
-        {
-            var vaultName = spec[14..];
-            if (string.IsNullOrWhiteSpace(vaultName))
-            {
-                throw new CommandLineUsageException("Azure Key Vault provider specs must use the form 'azurekeyvault:vault-name'.");
-            }
-
-            return $"azurekeyvault:{new AzureKeyVaultReference(vaultName)}";
-        }
-
-        if (LooksLikeUnknownProviderSpec(spec, out var providerName))
-        {
-            throw new CommandLineUsageException(
-                $"Unknown provider '{providerName}'. Supported providers: {SupportedProviders}.");
-        }
-
-        return $"local:{spec}";
+        return token;
     }
 
-    private static AzureAppServiceReference ParseAzureAppServiceReference(string spec)
+    private static string ResolveAzureDevOpsToken(CommandLineOptions options)
     {
-        var appSpec = spec["azureappservice:".Length..];
-        var segments = appSpec.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (segments.Length is not (3 or 4))
+        var token = options.GetOptional("azuredevops-token") ?? Environment.GetEnvironmentVariable("AZURE_DEVOPS_TOKEN");
+        if (string.IsNullOrWhiteSpace(token))
         {
-            throw new CommandLineUsageException(
-                "Azure App Service provider specs must use the form 'azureappservice:subscription-id/resource-group/app-name' or 'azureappservice:subscription-id/resource-group/app-name/slot-name'.");
+            throw new CommandLineUsageException("Azure DevOps operations require '--azuredevops-token' or the AZURE_DEVOPS_TOKEN environment variable.");
         }
 
-        try
-        {
-            return new AzureAppServiceReference(
-                segments[0],
-                segments[1],
-                segments[2],
-                segments.Length == 4 ? segments[3] : null);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new CommandLineUsageException(exception.Message);
-        }
+        return token;
     }
 
-    private static bool LooksLikeUnknownProviderSpec(string spec, out string providerName)
+    private static string? ResolveAwsRegion(CommandLineOptions options) =>
+        options.GetOptional("aws-region")
+        ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
+        ?? Environment.GetEnvironmentVariable("AWS_REGION");
+
+    private static string ResolveVaultAddress(CommandLineOptions options) =>
+        options.GetOptional("vault-address")
+        ?? Environment.GetEnvironmentVariable("VAULT_ADDR")
+        ?? "http://127.0.0.1:8200";
+
+    private static string ResolveVaultToken(CommandLineOptions options)
     {
-        providerName = string.Empty;
-        var colonIndex = spec.IndexOf(':');
-        if (colonIndex <= 0)
+        var token = options.GetOptional("vault-token") ?? Environment.GetEnvironmentVariable("VAULT_TOKEN");
+        if (string.IsNullOrWhiteSpace(token))
         {
-            return false;
+            throw new CommandLineUsageException("Vault operations require '--vault-token' or the VAULT_TOKEN environment variable.");
         }
 
-        if (colonIndex == 1 && char.IsLetter(spec[0]))
-        {
-            return false;
-        }
-
-        providerName = spec[..colonIndex];
-        return true;
+        return token;
     }
 
     private string ResolveSchemaPath(string? requestedPath)
@@ -685,6 +621,19 @@ internal sealed class CliApplication
                 disposable.Dispose();
             }
         }
+    }
+
+    // Discriminated union of parsed provider spec types. Parsing and description live here so
+    // CreateProviderLease and DescribeProviderSpec share a single code path.
+    private abstract record ParsedSpec(string Description)
+    {
+        internal sealed record Local(string FilePath) : ParsedSpec($"local:{FilePath}");
+        internal sealed record GitHub(GitHubRepositoryReference Repository) : ParsedSpec($"github:{Repository}");
+        internal sealed record AzureDevOps(AzureDevOpsVariableGroupReference GroupReference) : ParsedSpec($"azuredevops:{GroupReference}");
+        internal sealed record AzureAppService(AzureAppServiceReference Reference) : ParsedSpec($"azureappservice:{Reference}");
+        internal sealed record Ssm(string PathPrefix) : ParsedSpec($"ssm:{PathPrefix}");
+        internal sealed record Vault(string Mount, string SecretPath) : ParsedSpec($"vault:{Mount}/{SecretPath}");
+        internal sealed record AzureKeyVault(AzureKeyVaultReference Reference) : ParsedSpec($"azurekeyvault:{Reference}");
     }
 
     /// <summary>

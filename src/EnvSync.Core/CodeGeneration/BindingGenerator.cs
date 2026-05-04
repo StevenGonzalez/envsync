@@ -54,6 +54,11 @@ public sealed class BindingGenerator
 
         foreach (var definition in schema.Definitions)
         {
+            if (!string.IsNullOrWhiteSpace(definition.Description))
+            {
+                lines.Add($"  /** {definition.Description} */");
+            }
+
             var optionalSuffix = definition.IsOptionalWithoutDefault ? "?" : string.Empty;
             lines.Add($"  {propertyNames[definition.Name]}{optionalSuffix}: {GetTypeScriptType(definition)};");
         }
@@ -90,6 +95,11 @@ public sealed class BindingGenerator
 
         foreach (var definition in schema.Definitions)
         {
+            if (!string.IsNullOrWhiteSpace(definition.Description))
+            {
+                lines.Add($"    /// <summary>{definition.Description}</summary>");
+            }
+
             var propertyName = propertyNames[definition.Name];
             var propertyType = GetCSharpType(definition);
             var defaultValue = GetCSharpDefaultValue(definition);
@@ -252,6 +262,7 @@ public sealed class BindingGenerator
 
     private static readonly HashSet<string> TypeScriptKeywords = new(StringComparer.Ordinal)
     {
+        // ECMAScript reserved words
         "break",
         "case",
         "catch",
@@ -288,6 +299,7 @@ public sealed class BindingGenerator
         "void",
         "while",
         "with",
+        // ECMAScript strict-mode future reserved words
         "as",
         "implements",
         "interface",
@@ -298,6 +310,41 @@ public sealed class BindingGenerator
         "public",
         "static",
         "yield",
+        // TypeScript-specific keywords that would produce invalid output as identifiers
+        "abstract",
+        "any",
+        "asserts",
+        "assert",
+        "bigint",
+        "boolean",
+        "constructor",
+        "declare",
+        "get",
+        "infer",
+        "intrinsic",
+        "is",
+        "keyof",
+        "module",
+        "namespace",
+        "never",
+        "number",
+        "object",
+        "of",
+        "out",
+        "override",
+        "readonly",
+        "require",
+        "satisfies",
+        "set",
+        "string",
+        "symbol",
+        "type",
+        "undefined",
+        "unique",
+        "unknown",
+        "using",
+        "from",
+        "global",
     };
 
     private static readonly JsonSerializerOptions TypeScriptJsonOptions = new()
