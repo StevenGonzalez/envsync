@@ -61,6 +61,33 @@ public sealed class VaultKvProviderTests
         Assert.Equal("/v1/secret/data/myapp/production", handler.SentRequests[0].RequestUri!.AbsolutePath);
     }
 
+    [Fact]
+    public async Task ReadAsync_EscapesVaultPathSegments()
+    {
+        var handler = new QueuedHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, VaultReadBody([]));
+        var reference = new VaultKvReference("http://127.0.0.1:8200", "secret mount", "folder name/key#1");
+
+        using var provider = new VaultKvProvider(reference, Token, new HttpClient(handler));
+        await provider.ReadAsync();
+
+        Assert.Equal("/v1/secret%20mount/data/folder%20name/key%231", handler.SentRequests[0].RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ThrowsWithStatusAndBodyOnFailure()
+    {
+        var handler = new QueuedHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.Forbidden, """{"errors":["permission denied"]}""");
+
+        using var provider = new VaultKvProvider(Reference, Token, new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ReadAsync());
+
+        Assert.Contains("403", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("permission denied", exception.Message, StringComparison.Ordinal);
+    }
+
     // WriteAsync
 
     [Fact]

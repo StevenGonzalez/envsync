@@ -23,6 +23,18 @@ public sealed class LocalEnvFileProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadAsync_ReturnsEmptySnapshot_WhenFileDoesNotExist()
+    {
+        var path = System.IO.Path.Combine(_directory, "missing.env");
+        var provider = new LocalEnvFileProvider(path);
+
+        var snapshot = await provider.ReadAsync();
+
+        Assert.Equal($"local:{path}", snapshot.SourceName);
+        Assert.Empty(snapshot.Values);
+    }
+
+    [Fact]
     public async Task WriteAsync_PreservesExistingCommentsAndAppendsMissingKeys()
     {
         Directory.CreateDirectory(_directory);
@@ -39,6 +51,18 @@ public sealed class LocalEnvFileProviderTests : IDisposable
         Assert.Contains("# existing", content, StringComparison.Ordinal);
         Assert.Contains("APP_ENV=prod", content, StringComparison.Ordinal);
         Assert.Contains("PORT=3000", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WriteAsync_CreatesParentDirectoryWhenMissing()
+    {
+        var path = System.IO.Path.Combine(_directory, "nested", ".env");
+        var provider = new LocalEnvFileProvider(path);
+
+        await provider.WriteAsync([new ResolvedEnvironmentValue("APP_ENV", "production", false)]);
+
+        Assert.True(File.Exists(path));
+        Assert.Contains("APP_ENV=production", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
     }
 
     [Fact]

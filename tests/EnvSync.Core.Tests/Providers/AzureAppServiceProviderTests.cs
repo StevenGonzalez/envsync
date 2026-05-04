@@ -52,6 +52,20 @@ public sealed class AzureAppServiceProviderTests
             Assert.Single(handler.SentRequests).RequestUri.AbsolutePath);
     }
 
+    [Fact]
+    public async Task ReadAsync_EscapesResourceAndSlotPathSegments()
+    {
+        var reference = new AzureAppServiceReference(SubscriptionId, "rg name", "my-api", "staging slot");
+        var (provider, handler, _) = Build(reference);
+        handler.Enqueue(HttpStatusCode.OK, AppSettingsBody(("APP_ENV", "staging")));
+
+        await provider.ReadAsync();
+
+        Assert.Equal(
+            "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg%20name/providers/Microsoft.Web/sites/my-api/slots/staging%20slot/config/appsettings/list",
+            Assert.Single(handler.SentRequests).RequestUri.AbsolutePath);
+    }
+
     // WriteAsync
 
     [Fact]
@@ -104,6 +118,21 @@ public sealed class AzureAppServiceProviderTests
 
         Assert.Contains("environment variable name", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(handler.SentRequests);
+    }
+
+    [Fact]
+    public async Task WriteAsync_ThrowsWithStatusAndBodyWhenPutFails()
+    {
+        var (provider, handler, _) = Build();
+        handler.Enqueue(HttpStatusCode.OK, AppSettingsBody(("APP_ENV", "old")));
+        handler.Enqueue(HttpStatusCode.Conflict, """{"error":{"message":"restart in progress"}}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.WriteAsync([new ResolvedEnvironmentValue("APP_ENV", "production", false)]));
+
+        Assert.Contains("409", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("restart in progress", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(2, handler.SentRequests.Count);
     }
 
     // Reference

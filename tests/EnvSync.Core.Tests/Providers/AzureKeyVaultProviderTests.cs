@@ -158,6 +158,20 @@ public sealed class AzureKeyVaultProviderTests
     }
 
     [Fact]
+    public async Task WriteAsync_UsesPutSecretEndpoint()
+    {
+        var (provider, handler) = Build();
+        handler.Enqueue(HttpStatusCode.OK, SecretBody("API-KEY", "secret-value"));
+
+        await provider.WriteAsync([new ResolvedEnvironmentValue("API_KEY", "secret-value", true)]);
+
+        var request = Assert.Single(handler.SentRequests);
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Assert.Equal("/secrets/API-KEY", request.RequestUri.AbsolutePath);
+        Assert.Contains("api-version=", request.RequestUri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task WriteAsync_ReturnsUpdatedCountMatchingValuesWritten()
     {
         var (provider, handler) = Build();
@@ -236,12 +250,17 @@ public sealed class AzureKeyVaultProviderTests
             => ValueTask.FromResult(FakeToken);
     }
 
+    private sealed record SentRequest(
+        HttpMethod Method,
+        Uri RequestUri,
+        string? Body);
+
     private sealed class QueuedHttpMessageHandler : HttpMessageHandler
     {
         private readonly Queue<(HttpStatusCode Status, string Body)> _queue = new();
         private readonly List<(string UrlPattern, HttpStatusCode Status, string Body)> _urlRoutes = [];
 
-        public List<HttpRequestMessage> SentRequests { get; } = [];
+        public List<SentRequest> SentRequests { get; } = [];
 
         public void Enqueue(HttpStatusCode status, string body) => _queue.Enqueue((status, body));
 
@@ -251,10 +270,17 @@ public sealed class AzureKeyVaultProviderTests
         public void EnqueueForUrl(string urlPattern, HttpStatusCode status, string body) =>
             _urlRoutes.Add((urlPattern, status, body));
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            SentRequests.Add(request);
+            var requestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+
+            SentRequests.Add(new SentRequest(
+                request.Method,
+                request.RequestUri!,
+                requestBody));
 
             var url = request.RequestUri?.ToString() ?? string.Empty;
 
@@ -265,19 +291,19 @@ public sealed class AzureKeyVaultProviderTests
                 {
                     var (_, status, body) = _urlRoutes[i];
                     _urlRoutes.RemoveAt(i);
-                    return Task.FromResult(new HttpResponseMessage(status)
+                    return new HttpResponseMessage(status)
                     {
                         Content = new StringContent(body, Encoding.UTF8, "application/json"),
-                    });
+                    };
                 }
             }
 
             // Fall back to FIFO queue.
             var (qStatus, qBody) = _queue.Dequeue();
-            return Task.FromResult(new HttpResponseMessage(qStatus)
+            return new HttpResponseMessage(qStatus)
             {
                 Content = new StringContent(qBody, Encoding.UTF8, "application/json"),
-            });
+            };
         }
     }
 }

@@ -86,6 +86,21 @@ public sealed class AwsSsmProviderTests
     }
 
     [Fact]
+    public async Task ReadAsync_RequestsRecursiveParametersWithoutDecryption()
+    {
+        var client = BuildClient([]);
+
+        await new AwsSsmProvider(new AwsSsmReference(Prefix), client).ReadAsync();
+
+        await client.Received(1).GetParametersByPathAsync(
+            Arg.Is<GetParametersByPathRequest>(request =>
+                request.Path == Prefix &&
+                request.Recursive == true &&
+                request.WithDecryption == false),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ReadAsync_ReturnsEmptySnapshot_WhenNoParametersExist()
     {
         var client = BuildClient([]);
@@ -112,6 +127,21 @@ public sealed class AwsSsmProviderTests
                 r.Name == "/myapp/prod/PORT" &&
                 r.Value == "8080" &&
                 r.Overwrite == true),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WriteAsync_NormalizesTrailingSlashInPathPrefix()
+    {
+        var client = Substitute.For<IAmazonSimpleSystemsManagement>();
+        client.PutParameterAsync(Arg.Any<PutParameterRequest>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new PutParameterResponse()));
+
+        await new AwsSsmProvider(new AwsSsmReference("/myapp/prod/"), client)
+            .WriteAsync([new ResolvedEnvironmentValue("PORT", "8080", false)]);
+
+        await client.Received(1).PutParameterAsync(
+            Arg.Is<PutParameterRequest>(request => request.Name == "/myapp/prod/PORT"),
             Arg.Any<CancellationToken>());
     }
 
