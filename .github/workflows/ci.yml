@@ -12,8 +12,12 @@ permissions:
 
 jobs:
   build:
-    name: Build and test
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Check out repository
@@ -35,6 +39,3 @@ jobs:
 
       - name: Audit vulnerable packages
         run: dotnet list EnvSync.slnx package --vulnerable --include-transitive
-
-      - name: List outdated packages
-        run: dotnet list EnvSync.slnx package --outdated

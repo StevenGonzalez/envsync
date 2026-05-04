@@ -90,9 +90,28 @@ internal sealed class DotEnvDocument
             return false;
         }
 
-        var rawValue = line[(separatorIndex + 1)..].Trim();
+        var rawValue = StripInlineComment(line[(separatorIndex + 1)..].Trim());
         assignmentLine = new AssignmentLine(key, Unescape(rawValue));
         return true;
+    }
+
+    // Strips a trailing `# comment` from an unquoted value. Quoted values are returned unchanged
+    // because the comment could be part of the string content.
+    private static string StripInlineComment(string rawValue)
+    {
+        if (rawValue.Length == 0)
+        {
+            return rawValue;
+        }
+
+        var first = rawValue[0];
+        if (first == '"' || first == '\'')
+        {
+            return rawValue;
+        }
+
+        var commentIndex = rawValue.IndexOf('#');
+        return commentIndex > 0 ? rawValue[..commentIndex].TrimEnd() : rawValue;
     }
 
     private static string Unescape(string rawValue)

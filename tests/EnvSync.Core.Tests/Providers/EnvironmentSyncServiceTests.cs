@@ -60,6 +60,65 @@ public sealed class EnvironmentSyncServiceTests
         Assert.Empty(target.WrittenValues);
     }
 
+    [Fact]
+    public async Task SyncAsync_ThrowsEnvironmentSyncException_WhenSourceHasValidationErrors()
+    {
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "APP_ENV", Type = EnvValueType.String, Required = true, AllowedValues = ["dev", "prod"] },
+        ]);
+
+        // Source has a disallowed value — this should block the sync.
+        var source = new InMemoryProvider(new EnvironmentSnapshot("source", [EnvironmentValue.Available("APP_ENV", "staging")]));
+        var target = new InMemoryProvider(new EnvironmentSnapshot("target", []));
+        var service = new EnvironmentSyncService(new SchemaValidator());
+
+        await Assert.ThrowsAsync<EnvironmentSyncException>(() => service.SyncAsync(schema, source, target));
+        Assert.Equal(0, target.WriteCalls);
+    }
+
+    [Fact]
+    public async Task SyncAsync_OverwritesHiddenTargetValue()
+    {
+        // When the target hides a value, ShouldWriteValue should treat it as "must write"
+        // because we cannot confirm the values match.
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "API_KEY", Type = EnvValueType.String, Required = true, Secret = true },
+        ]);
+
+        var source = new InMemoryProvider(new EnvironmentSnapshot("source", [EnvironmentValue.Available("API_KEY", "new-secret")]));
+        var target = new InMemoryProvider(new EnvironmentSnapshot("target", [EnvironmentValue.Hidden("API_KEY")]));
+        var service = new EnvironmentSyncService(new SchemaValidator());
+
+        var result = await service.SyncAsync(schema, source, target);
+
+        Assert.Equal(1, result.WrittenCount);
+        Assert.Equal(1, target.WriteCalls);
+    }
+
+    [Fact]
+    public async Task SyncAsync_WritesChangedValues_SkipsUnchanged()
+    {
+        var schema = new EnvSchema([
+            new EnvVariableDefinition { Name = "APP_ENV", Type = EnvValueType.String, Required = true },
+            new EnvVariableDefinition { Name = "PORT", Type = EnvValueType.Number, Required = true },
+        ]);
+
+        var source = new InMemoryProvider(new EnvironmentSnapshot("source", [
+            EnvironmentValue.Available("APP_ENV", "prod"),
+            EnvironmentValue.Available("PORT", "9000"),
+        ]));
+        var target = new InMemoryProvider(new EnvironmentSnapshot("target", [
+            EnvironmentValue.Available("APP_ENV", "prod"),  // same — should not be written
+            EnvironmentValue.Available("PORT", "3000"),      // different — should be written
+        ]));
+        var service = new EnvironmentSyncService(new SchemaValidator());
+
+        var result = await service.SyncAsync(schema, source, target);
+
+        Assert.Equal(1, result.WrittenCount);
+        Assert.Equal("PORT", target.WrittenValues.Single().Key);
+    }
+
     private sealed class InMemoryProvider : IEnvironmentProvider
     {
         private readonly EnvironmentSnapshot _snapshot;

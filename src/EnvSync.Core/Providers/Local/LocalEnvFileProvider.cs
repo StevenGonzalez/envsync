@@ -109,10 +109,8 @@ public sealed class LocalEnvFileProvider : IEnvironmentProvider
                 AccessControlType.Allow));
 
             new FileInfo(path).SetAccessControl(security);
-            return;
         }
-
-        if (!OperatingSystem.IsWindows())
+        else
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }

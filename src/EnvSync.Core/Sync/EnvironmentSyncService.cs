@@ -61,6 +61,7 @@ public sealed class EnvironmentSyncService
 
                 if (sourceValue.Value is null)
                 {
+                    warnings.Add($"Skipped '{definition.Name}' because the source provider returned a null value.");
                     continue;
                 }
 
