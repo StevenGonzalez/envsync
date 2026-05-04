@@ -1,5 +1,5 @@
 # EnvSync
-<img width="1024" height="1024" alt="EnvSync" src="https://github.com/user-attachments/assets/7257506f-9c69-446e-a362-c48f3dd3f00e" />
+<img width="512" height="512" alt="EnvSync" src="https://github.com/user-attachments/assets/7257506f-9c69-446e-a362-c48f3dd3f00e" />
 
 EnvSync is a CLI-first universal environment variable manager. It keeps a single schema file as the source of truth for environment variables and synchronises values across local `.env` files, GitHub Actions, Azure DevOps Library variable groups, AWS SSM Parameter Store, HashiCorp Vault, Azure Key Vault, and generated typed bindings for TypeScript and C#.
 
